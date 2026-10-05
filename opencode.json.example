@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "sure": {
+        "type": "remote",
+        "url": "http://127.0.0.1:3000/mcp",
+        "headers": {
+          "Authorization": "Bearer <MCP_API_TOKEN>"
+        }
+      }
+    }
+  }
+}

@@ -5,6 +5,11 @@
 !.env.example
 !**/.env.example
 
+# Config de OpenCode de ESTA máquina — lleva el token del MCP de Sure
+# (mismo criterio que .env: local, 600, fuera de git)
+opencode.json
+!opencode.json.example
+
 # Docker: datos en runtime
 *.log
 

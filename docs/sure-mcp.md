@@ -28,21 +28,41 @@ docker compose logs -f web            # logs
 ### A. Servidor MCP nativo en OpenCode ✅ (el configurado)
 
 ```bash
+cd /home/germoso/code/finance-box
 opencode mcp list
-# ✓ sure   connected
+# ✓ azure-devops  connected
+# ✓ sure          connected
 ```
 
-Config en `~/.config/opencode/opencode.json`:
+Config en **`./opencode.json`** (config de **proyecto**, no global):
 
 ```jsonc
-"sure": {
-  "type": "remote",
-  "url": "http://127.0.0.1:3000/mcp",
-  "headers": { "Authorization": "Bearer <MCP_API_TOKEN>" }
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "sure": {
+        "type": "remote",
+        "url": "http://127.0.0.1:3000/mcp",
+        "headers": { "Authorization": "Bearer <MCP_API_TOKEN>" }
+      }
+    }
+  }
 }
 ```
 
-Las herramientas aparecen como **`tools.sure.*`**. Los esquemas los descubre
+> **Por qué de proyecto y no global**: el alcance del MCP es `read_write`
+> (incluye `delete_transaction`). Si estuviera en la config global, **cualquier
+> sesión de cualquier directorio** tendría acceso a tus finanzas sin las reglas
+> de `AGENTS.md`. Verificado:
+> `jobradar → solo azure-devops` · `finance-box → azure-devops + sure`.
+>
+> `opencode.json` está en `.gitignore` (permisos **600**) porque lleva el
+> token. En el repo va **`opencode.json.example`** con el placeholder.
+> Tras clonar: `cp opencode.json.example opencode.json` y reemplazar el token
+> por el de `deploy/.env`.
+
+Las herramientas aparecen como **`tools.sure.*`**. Los esquemas las descubre
 OpenCode solo (`search({namespace:"sure"})`); **no hace falta memorizarlos**.
 
 ### B. Fallback por HTTP (si el server nativo no conecta)
@@ -139,7 +159,7 @@ curl -X POST http://127.0.0.1:3000/mcp \
 | Síntoma | Causa / solución |
 |---|---|
 | `401 unauthorized` | token mal o `MCP_USER_EMAIL` no coincide con un usuario |
-| `opencode mcp list` → *needs authentication* | falta el header; re-ejecutar `opencode mcp add sure --global --url http://127.0.0.1:3000/mcp --header "Authorization=Bearer $TOKEN"` |
+| `opencode mcp list` → *needs authentication* o no aparece | falta el header. Re-crear la config **de proyecto** (sin `--global`):<br>`opencode mcp add sure --url http://127.0.0.1:3000/mcp --header "Authorization=Bearer $TOKEN"`<br>y asegurarse de quitar la entrada de `~/.config/opencode/opencode.json` si se había agregado con `--global` |
 | OAuth falla con *"Refusing to send credentials to non-https"* | OpenCode exige TLS salvo en `localhost`/`127.0.0.1`. Con URL `192.168.18.41` nunca funciona. **Solución adoptada: token estático por header.** |
 | `ERR_CONNECTION_REFUSED` en un puerto raro | es un **callback OAuth de un intento viejo** (puerto aleatorio, un solo uso). No se usa a mano; reintentar con `/mcps`. |
 | Cotizaciones en 1:1 otra vez | falta la tasa. Ver [`setup.md`](setup.md) → troubleshooting IPv6 / `gai.conf` |
