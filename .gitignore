@@ -1,0 +1,5 @@
+# Secretos — nunca se commitean ni siquiera en repos privados
+.env
+
+# Docker: datos en runtime
+*.log
