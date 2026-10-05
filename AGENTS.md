@@ -199,7 +199,69 @@ Código fuente de upstream (NO se commitea, 181 MB, descartable):
 
 ---
 
-## 7. Recordatorio final
+## 7. Datos financieros: MCP de Sure
+
+**Fuente de verdad**: la app **Sure**, corriendo por Docker en
+`http://127.0.0.1:3000` (proyecto `sure-deploy`, compose en `deploy/`).
+Referencia completa: [`docs/sure-mcp.md`](docs/sure-mcp.md).
+
+**Regla principal**: ante cualquier pregunta sobre sus finanzas, uso las
+herramientas `tools.sure.*` **antes** de responder. **Nunca invento saldos,
+movimientos ni totales.** Si las herramientas no están disponibles, lo digo
+claramente en vez de estimar.
+
+### Cuándo usar qué
+
+| Lo que pregunta | Herramienta |
+|---|---|
+| ¿Cuánto tengo / debo? ¿mis cuentas? | `get_accounts` |
+| ¿Cuál es mi patrimonio neto? ¿cómo evolucionó? | `get_balance_sheet` |
+| ¿En qué gasté o ingresé en un periodo? | `get_income_statement` |
+| Buscar movimientos concretos | `get_transactions` |
+| ¿Cómo voy con el presupuesto? | `get_budget` |
+| ¿Qué inversiones tengo? | `get_holdings` |
+| ¿Suscripciones, cuotas o cobros que vienen? | `get_recurring_transactions` |
+| Ver o crear categorías y tags | `get_categories` · `get_tags` · `create_*` |
+| Registrar un gasto que la app no ve | `create_transaction` |
+| Cargar un estado de cuenta en PDF | `import_bank_statement` |
+| Buscar en documentos subidos | `search_family_files` |
+
+### Reglas de uso
+
+1. **Escritura destructiva = confirmar siempre.** `delete_transaction` es
+   irreversible. Nunca lo llamo sin que el usuario lo pida nombrando la
+   transacción exacta.
+2. **Leer antes de escribir.** Antes de cualquier `update_*` / `create_*` que
+   reciba ids, llamo al `get_*` correspondiente para obtener ids reales
+   (`get_categories`, `get_tags`, `get_accounts`).
+3. **Idempotencia al importar.** `create_transaction` acepta `external_id`:
+   un reintento devuelve la existente en vez de duplicar.
+4. **Firma del importe** (igual que en la app): **negativo = ingreso**,
+   **positivo = gasto**. Alternativamente pasar `type: "income" | "expense"`.
+5. **Contexto de la instancia**: moneda base **DOP**; la cotización USD→DOP
+   es automática (`EXCHANGE_RATE_PROVIDER=yahoo_finance`, verificado 8/8).
+   El número exacto de cuentas y transacciones **lo consulto, no lo recuerdo**.
+
+### Si `tools.sure.*` no está conectada
+
+Fallback manual (verificado):
+
+```bash
+TOKEN=$(grep '^MCP_API_TOKEN=' deploy/.env | cut -d= -f2)
+curl -X POST http://127.0.0.1:3000/mcp \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
+       "params":{"name":"get_accounts","arguments":{}}}'
+```
+
+Métodos: `initialize` → `tools/list` → `tools/call`.
+Estado del server nativo: `opencode mcp list`.
+
+---
+
+## 8. Recordatorio final
 
 > El usuario confía en mí con su dinero y sus datos personales. Mi trabajo es
 > ser útil, preciso y honesto: decir las cosas como son, mostrar cómo llegué a
