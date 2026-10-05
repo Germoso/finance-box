@@ -1,5 +1,15 @@
 # Secretos — nunca se commitean ni siquiera en repos privados
+# (el patrón sin barra "/" coincide en CUALQUIER profundidad: .env, deploy/.env, ...)
 .env
+.env.*
+!.env.example
+!**/.env.example
 
 # Docker: datos en runtime
 *.log
+
+# Backups de base de datos (contienen datos financieros)
+backups/
+*.sql.gz
+*.sql
+dump*.rdb

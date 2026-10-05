@@ -1,0 +1,232 @@
+# ===========================================================================
+#  Sure - despliegue local ENDURECIDO (usa la imagen construida desde fuente)
+#
+#  Imagen:  sure:local  (build Nivel C desde /home/germoso/code/sure)
+#  Creado:  2026-10-04
+#
+#  Endurecimiento aplicado sobre compose.example.yml del upstream:
+#    + security_opt: no-new-privileges:true   (no escalar privilegios)
+#    + cap_drop: ALL (+ minimas necesarias)
+#    + mem_limit / pids_limit                 (no secuestrar la RAM del host)
+#    + read_only + tmpfs                      (FS de solo escritura)
+#    + init: true                             (reaper de zombies / señales)
+#    + puerto atado a la IP de LAN            (no expuesto en toda la máquina)
+#    - SIN servicios backup / IA (profiles, no habilitados)
+#    - SIN DNS forzado a 8.8.8.8/1.1.1.1     (usa el DNS del host)
+#
+#  Arranque:   docker compose up -d
+#  Salida:     docker compose down
+#  Logs:       docker compose logs -f web
+#  Health:     curl http://192.168.18.41:3000/up
+# ===========================================================================
+
+# Fija el nombre del proyecto Docker. SIN esto, Compose usa el nombre de la
+# CARPETA que contiene este archivo -> al moverlo (sure-deploy/ -> deploy/)
+# se crearian contenedores y volumenes NUEVOS y se perderia la base de datos
+# (sure-deploy_postgres-data). Mantener = "sure-deploy" siempre.
+name: sure-deploy
+
+x-app-env: &app_env
+  # --- Seguridad: secretos generados localmente en .env (nunca los defaults) ---
+  SECRET_KEY_BASE: ${SECRET_KEY_BASE:?SECRET_KEY_BASE es obligatorio}
+  ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY: ${ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY:?faltan claves AR}
+  ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY: ${ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY:?faltan claves AR}
+  ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT: ${ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT:?faltan claves AR}
+
+  # --- Base de datos ---
+  POSTGRES_USER: ${POSTGRES_USER:-sure}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD es obligatorio}
+  POSTGRES_DB: ${POSTGRES_DB:-sure_production}
+  DB_HOST: db
+  DB_PORT: 5432
+  REDIS_URL: redis://redis:6379/1
+
+  # --- App ---
+  SELF_HOSTED: "true"
+  RAILS_FORCE_SSL: "false"
+  RAILS_ASSUME_SSL: "false"
+  APP_DOMAIN: ${APP_DOMAIN:-192.168.18.41:3000}
+  ONBOARDING_STATE: ${ONBOARDING_STATE:-open}
+  RAILS_ENV: production
+
+  # --- Privacidad: cero telemetria hacia terceros (auditoria B2) ---
+  POSTHOG_FEEDBACK_ENABLED: "false"
+  POSTHOG_KEY: ""
+  POSTHOG_HOST: ""
+
+  # --- Cotizaciones automaticas (solo manda el par de divisas, sin datos tuyos) ---
+  EXCHANGE_RATE_PROVIDER: ${EXCHANGE_RATE_PROVIDER:-}
+
+  # --- MCP: servidor para asistentes de IA (docs/hosting/mcp.md) ---
+  # Ambos servicios (web y worker) heredan la configuracion.
+  MCP_API_TOKEN: ${MCP_API_TOKEN:-}
+  MCP_USER_EMAIL: ${MCP_USER_EMAIL:-}
+
+  # --- APIs externas: vacias por defecto (nada sale de la maquina) ---
+  OPENAI_ACCESS_TOKEN: ${OPENAI_ACCESS_TOKEN:-}
+  OPENAI_MODEL: ${OPENAI_MODEL:-}
+  SENTRY_DSN: ""
+  SKYLIGHT_AUTHENTICATION: ""
+  SKYLIGHT_ENABLED: "false"
+  LOGTAIL_API_KEY: ""
+  LANGFUSE_PUBLIC_KEY: ""
+  LANGFUSE_SECRET_KEY: ""
+
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  # Fix IPv6: el resolver devuelve AAAA primero y el contenedor NO tiene ruta
+  # IPv6 de salida -> conexiones HTTPS intermitentes (Yahoo Finance: 3/5 OK).
+  # Upstream lo resuelve forzando DNS 8.8.8.8/1.1.1.1 (envia tu DNS a Google);
+  # aqui se deshabilita IPv6 en su lugar, conservando el DNS del host.
+  sysctls:
+    - net.ipv6.conf.all.disable_ipv6=1
+    - net.ipv6.conf.default.disable_ipv6=1
+  init: true
+  restart: unless-stopped
+  networks:
+    - sure_net
+
+services:
+  web:
+    <<: *hardening
+    image: sure:local
+    ports:
+      # Atado solo a la IP de LAN: accesible desde tu celular en el WiFi,
+      # NO expuesto en demas interfaces de la maquina.
+      # (Si cambia tu IP por DHCP, pon "3000:3000" para exponer en todas)
+      - "${PORT_BIND:-192.168.18.41}:${PORT:-3000}:3000"
+    read_only: true
+    volumes:
+      - app-storage:/rails/storage
+      # Preferencia IPv4 (ver gai.conf): evita el intento IPv6 que no tiene ruta
+      - ./gai.conf:/etc/gai.conf:ro
+      # Nota: los tmpfs declarados con `tmpfs:` corto quedan en modo 775 (root)
+      # y la app (UID 1000) no puede escribir. Se declara mode 0o1777 explícito.
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          mode: 0o1777
+      - type: tmpfs
+        target: /rails/tmp
+        tmpfs:
+          mode: 0o1777
+      - type: tmpfs
+        target: /rails/log
+        tmpfs:
+          mode: 0o1777
+    mem_limit: 1g
+    pids_limit: 300
+    environment:
+      <<: *app_env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/up >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+  worker:
+    <<: *hardening
+    image: sure:local
+    command: bundle exec sidekiq
+    read_only: true
+    volumes:
+      - app-storage:/rails/storage
+      # Preferencia IPv4 (ver gai.conf): evita el intento IPv6 que no tiene ruta
+      - ./gai.conf:/etc/gai.conf:ro
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          mode: 0o1777
+      - type: tmpfs
+        target: /rails/tmp
+        tmpfs:
+          mode: 0o1777
+      - type: tmpfs
+        target: /rails/log
+        tmpfs:
+          mode: 0o1777
+    mem_limit: 768m
+    pids_limit: 200
+    environment:
+      <<: *app_env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # Postgres necesita estas para inicializar el data dir; todo lo demas se quita
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - FOWNER
+      - DAC_OVERRIDE
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sure}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD es obligatorio}
+      POSTGRES_DB: ${POSTGRES_DB:-sure_production}
+    mem_limit: 512m
+    pids_limit: 100
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sure} -d ${POSTGRES_DB:-sure_production}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - sure_net
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # El entrypoint usa setpriv para bajar de root a usuario `redis`,
+    # lo que requiere SETUID/SETGID. Todo lo demas queda retirado.
+    cap_add:
+      - SETUID
+      - SETGID
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 256m
+    pids_limit: 50
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - sure_net
+
+volumes:
+  app-storage:
+  postgres-data:
+  redis-data:
+
+networks:
+  sure_net:
+    driver: bridge
