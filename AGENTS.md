@@ -142,20 +142,32 @@ Cuando me pida analizar algo, seguir este orden:
 
 ## 4. Estructura del proyecto
 
-- Directorio de trabajo: `/home/germoso/code/finance-test`
+- Directorio de trabajo: `/home/germoso/code/finance-box`
+  (repo: `github.com/Germoso/finance-box`, **privado**)
 - Este archivo es la referencia principal de cómo debo comportarme. Si crece
   demasiado, mover las guías detalladas a `docs/` y dejar aquí solo lo esencial.
 - Mantener el repositorio ordenado: separar datos, código y reportes.
 
 ```
-finance-test/
-├── AGENTS.md        ← este archivo (reglas y rol)
-├── docs/            ← guías y explicaciones extendidas
-├── data/            ← datos financieros (privados, fuera de git)
-└── src/             ← código, scripts y análisis
-```
+finance-box/
+├── AGENTS.md              ← este archivo (reglas y rol)
+├── UPSTREAM.md            ← versión de Sure fijada + cómo reconstruir/actualizar
+├── compose.yml            ← (plantilla de Maybe, referencia; NO es la que corre)
+├── .env                   ← local, fuera de git
+├── .env.example
+├── docs/
+│   ├── auditoria-sure.md  ← auditoría de seguridad (🟢 sin código malicioso)
+│   └── setup.md           ← alta desde cero, MCP, troubleshooting
+└── deploy/                ← ★ lo que está corriendo
+    ├── compose.yml        ← despliegue endurecido (nombre de proyecto fijado)
+    ├── .env               ← secretos REALES — local, permisos 600, nunca en git
+    ├── .env.example       ← plantilla con placeholders
+    ├── gai.conf           ← precedencia IPv4 (fix de Yahoo Finance)
+    └── README.md
 
-> La estructura anterior es una propuesta; ajustarla cuando el proyecto tome forma.
+Código fuente de upstream (NO se commitea, 181 MB, descartable):
+  /home/germoso/code/sure/   → clone de we-promise/sure, solo contexto de build
+```
 
 ---
 

@@ -95,9 +95,15 @@ services:
     image: sure:local
     ports:
       # Atado solo a la IP de LAN: accesible desde tu celular en el WiFi,
-      # NO expuesto en demas interfaces de la maquina.
+      # NO expuesto en demas interfaces de la maquina (ni en Tailscale).
       # (Si cambia tu IP por DHCP, pon "3000:3000" para exponer en todas)
       - "${PORT_BIND:-192.168.18.41}:${PORT:-3000}:3000"
+      # Loopback: necesario para que OpenCode complete el flujo OAuth del MCP.
+      # OpenCode rechaza intercambiar el token por HTTP plano salvo en
+      # localhost/127.0.0.1/::1. Sure devuelve los endpoints segun el Host
+      # pedido, asi que con este bind obtiene token_endpoint en 127.0.0.1.
+      # Añadirlo NO amplia la exposicion: sigue sin salir de tu maquina + LAN.
+      - "127.0.0.1:${PORT:-3000}:3000"
     read_only: true
     volumes:
       - app-storage:/rails/storage

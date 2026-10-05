@@ -71,7 +71,7 @@ git merge origin/main                         # o git reset --hard origin/main
 #   - CHANGELOG / releases por avisos de migración
 
 docker build --build-arg BUILD_COMMIT_SHA=$(git rev-parse HEAD) -t sure:local .
-cd /home/germoso/code/finance-test/deploy
+cd /home/germoso/code/finance-box/deploy
 docker compose up -d
 ```
 

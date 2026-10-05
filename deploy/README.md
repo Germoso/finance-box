@@ -11,7 +11,7 @@ Instancia self-hosteada de **Sure** (gestor de finanzas personales, fork de Mayb
 | **Imagen** | `sure:local` — construida desde fuente en `/home/germoso/code/sure` |
 | **Commit** | `14638a70181d9adadc75e7d47d5b2975ee18bf46` (embebido en la imagen) |
 | **Creado** | 2026-10-04 |
-| **Auditoría** | `../../finance-test/docs/auditoria-sure.md` → 🟢 sin código malicioso |
+| **Auditoría** | [`../docs/auditoria-sure.md`](../docs/auditoria-sure.md) → 🟢 sin código malicioso |
 
 ## Archivos
 
@@ -23,7 +23,7 @@ Instancia self-hosteada de **Sure** (gestor de finanzas personales, fork de Mayb
 ## Comandos
 
 ```bash
-cd /home/germoso/code/finance-test/deploy
+cd /home/germoso/code/finance-box/deploy
 
 docker compose ps                 # estado
 docker compose logs -f web        # logs de la app
